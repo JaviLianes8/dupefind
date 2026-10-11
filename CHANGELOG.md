@@ -9,3 +9,9 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.0]
 
 - First release.
+- `find_duplicates` returns duplicate files grouped by their full content hash.
+- `iter_duplicates` streams the same groups one at a time.
+- Staged matching compares files by size, then a partial hash, then a full hash,
+  so unique files are never read in full.
+- Read-only by design: the search reads file contents and never modifies, moves
+  or deletes anything on disk.
