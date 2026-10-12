@@ -5,21 +5,43 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-_PREFIX = 4096
-_CHUNK = 65536
+_CHUNK = 1 << 20
 
 
-def partial_digest(path: Path) -> str:
-    """Hash the first block of a file, a cheap discriminator before a full read."""
+def _new(algorithm: str) -> hashlib._Hash:
+    try:
+        return hashlib.new(algorithm, usedforsecurity=False)
+    except TypeError:  # pragma: no cover - builds without the keyword
+        return hashlib.new(algorithm)
+
+
+def hash_prefix(path: Path, algorithm: str, size: int) -> tuple[str, int]:
+    """Hash the first ``size`` bytes of a file; return the hex digest and bytes read."""
+    hasher = _new(algorithm)
     with path.open("rb") as handle:
-        block = handle.read(_PREFIX)
-    return hashlib.sha256(block).hexdigest()
+        block = handle.read(size)
+    hasher.update(block)
+    return hasher.hexdigest(), len(block)
 
 
-def full_digest(path: Path) -> str:
-    """Hash the entire file, read in fixed-size chunks."""
-    hasher = hashlib.sha256()
+def hash_whole(path: Path, algorithm: str) -> tuple[str, int]:
+    """Hash a whole file in fixed-size chunks; return the hex digest and bytes read."""
+    hasher = _new(algorithm)
+    total = 0
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(_CHUNK), b""):
+        while chunk := handle.read(_CHUNK):
             hasher.update(chunk)
-    return hasher.hexdigest()
+            total += len(chunk)
+    return hasher.hexdigest(), total
+
+
+def same_content(first: Path, second: Path) -> bool:
+    """Compare two files byte for byte, stopping at the first difference."""
+    with first.open("rb") as one, second.open("rb") as two:
+        while True:
+            left = one.read(_CHUNK)
+            right = two.read(_CHUNK)
+            if left != right:
+                return False
+            if not left:
+                return True

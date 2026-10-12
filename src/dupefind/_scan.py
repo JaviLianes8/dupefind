@@ -1,53 +1,169 @@
-"""Walk a directory tree read-only and group regular files by byte size."""
+"""Walk the roots read-only and collect the regular files worth comparing."""
 
 from __future__ import annotations
 
 import os
+import stat
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path
 
+from ._options import ScanOptions
+from ._types import IssueKind, Progress, ScanIssue
 
-def group_by_size(root: Path, *, follow_symlinks: bool) -> dict[int, list[Path]]:
-    """Group every regular file under ``root`` by its size in bytes."""
-    groups: dict[int, list[Path]] = defaultdict(list)
-    for path in _iter_files(root, follow_symlinks=follow_symlinks):
+_MOUNT_POINT = 0xA0000003  # IO_REPARSE_TAG_MOUNT_POINT: a Windows junction or mounted volume
+
+
+@dataclass(slots=True)
+class Entry:
+    """A regular file found by the walk, with the stat values the scan relies on."""
+
+    path: Path
+    size: int
+    mtime_ns: int
+    identity: tuple[int, int] | None = None
+    aliases: list[Path] = field(default_factory=list)
+    explicit: bool = False  # given as a root, so followed even when it is a link
+
+
+class Walker:
+    """Collect files from several roots, recording what could not be read."""
+
+    def __init__(
+        self,
+        options: ScanOptions,
+        issues: list[ScanIssue],
+        on_progress: Callable[[Progress], None] | None = None,
+    ) -> None:
+        self.options = options
+        self.issues = issues
+        self.on_progress = on_progress
+        self.entries: list[Entry] = []
+        self._dirs: set[str] = set()
+
+    def walk(self, roots: Iterable[str | os.PathLike[str]]) -> list[Entry]:
+        """Walk every root in order and return the files found, each once."""
+        for root in roots:
+            self._walk_root(Path(root))
+        return self.entries
+
+    def issue(self, path: Path, exc: OSError) -> None:
+        """Record an OS error against ``path``, once per path and kind."""
+        found = ScanIssue(path, issue_kind(exc), str(exc))
+        if not any((i.path, i.kind) == (found.path, found.kind) for i in self.issues):
+            self.issues.append(found)
+
+    def _walk_root(self, root: Path) -> None:
+        # Paths given explicitly are followed even when they are links, like `find -H`.
         try:
-            size = path.stat().st_size
-        except OSError:
-            continue
-        groups[size].append(path)
-    return groups
+            info = os.stat(root)
+        except OSError as exc:
+            self.issue(root, exc)
+            return
+        if stat.S_ISDIR(info.st_mode):
+            self._walk_dir(root)
+        elif stat.S_ISREG(info.st_mode):
+            self._consider(root, root.name, info, explicit=True)
 
-
-def _iter_files(root: Path, *, follow_symlinks: bool) -> Iterator[Path]:
-    # When following symlinks, remember resolved directories so cycles cannot loop.
-    seen: set[str] = set()
-    stack = [root]
-    while stack:
-        current = stack.pop()
-        if follow_symlinks and not _first_visit(current, seen):
-            continue
-        try:
-            entries = list(os.scandir(current))
-        except OSError:
-            continue
-        for entry in entries:
-            if entry.is_symlink() and not follow_symlinks:
+    def _walk_dir(self, root: Path) -> None:
+        stack: list[tuple[Path, str]] = [(root, "")]
+        while stack:
+            current, rel = stack.pop()
+            if not _first(self._dirs, current):
                 continue
             try:
-                if entry.is_dir(follow_symlinks=follow_symlinks):
-                    stack.append(Path(entry.path))
-                elif entry.is_file(follow_symlinks=follow_symlinks):
-                    yield Path(entry.path)
-            except OSError:
+                with os.scandir(current) as it:
+                    entries = sorted(it, key=lambda e: e.name)
+            except OSError as exc:
+                self.issue(current, exc)
                 continue
+            subdirs: list[tuple[Path, str]] = []
+            for entry in entries:
+                child = f"{rel}{entry.name}"
+                found = self._visit(entry, child)
+                if found is not None:
+                    subdirs.append((Path(entry.path), found))
+            stack.extend(reversed(subdirs))
+
+    def _visit(self, entry: os.DirEntry[str], rel: str) -> str | None:
+        """Handle one directory entry; return the relative prefix if it is a directory."""
+        follow = self.options.follow_symlinks
+        path = Path(entry.path)
+        try:
+            linked = entry.is_symlink() or is_junction(entry.stat(follow_symlinks=False))
+            if linked and not follow:
+                return None
+            if entry.is_dir(follow_symlinks=follow):
+                return None if self._excluded(entry.name, rel) else rel + "/"
+            if not entry.is_file(follow_symlinks=follow):
+                return None
+            if self._excluded(entry.name, rel) or not self._included(entry.name, rel):
+                return None
+            info = entry.stat(follow_symlinks=follow)
+        except OSError as exc:
+            self.issue(path, exc)
+            return None
+        self._consider(path, rel, info)
+        return None
+
+    def _consider(
+        self, path: Path, rel: str, info: os.stat_result, *, explicit: bool = False
+    ) -> None:
+        if self.options.accepts_size(info.st_size):
+            entry = Entry(path, info.st_size, info.st_mtime_ns, explicit=explicit)
+            self.entries.append(entry)
+        if self.on_progress is not None:
+            count = len(self.entries)
+            self.on_progress(Progress("walk", count, count))
+
+    def _excluded(self, name: str, rel: str) -> bool:
+        return any(_match(pattern, name, rel) for pattern in self.options.exclude)
+
+    def _included(self, name: str, rel: str) -> bool:
+        patterns = self.options.include
+        return not patterns or any(_match(pattern, name, rel) for pattern in patterns)
 
 
-def _first_visit(path: Path, seen: set[str]) -> bool:
-    """Return True the first time a resolved directory is seen, False after."""
-    resolved = str(path.resolve())
-    if resolved in seen:
+def _match(pattern: str, name: str, rel: str) -> bool:
+    return fnmatch(rel, pattern) if "/" in pattern else fnmatch(name, pattern)
+
+
+def real_key(path: Path) -> str:
+    """Return a key naming the location ``path`` really refers to, links resolved."""
+    try:
+        return os.path.normcase(os.path.realpath(path))
+    except OSError:
+        return os.path.normcase(os.path.abspath(path))
+
+
+def _first(seen: set[str], path: Path) -> bool:
+    """Return True the first time a real location is met, so nothing is walked twice."""
+    key = real_key(path)
+    if key in seen:
         return False
-    seen.add(resolved)
+    seen.add(key)
     return True
+
+
+def is_junction(info: os.stat_result) -> bool:
+    """Return True for a Windows junction (a directory reparse point that is not a symlink)."""
+    return getattr(info, "st_reparse_tag", 0) == _MOUNT_POINT
+
+
+def issue_kind(exc: OSError) -> IssueKind:
+    """Classify an OS error as one of the documented issue kinds."""
+    if isinstance(exc, PermissionError):
+        return "permission"
+    if isinstance(exc, FileNotFoundError | NotADirectoryError):
+        return "missing"
+    return "error"
+
+
+def group_by_size(entries: Iterable[Entry]) -> dict[int, list[Entry]]:
+    """Group entries by size, keeping only sizes shared by two or more entries."""
+    groups: dict[int, list[Entry]] = defaultdict(list)
+    for entry in entries:
+        groups[entry.size].append(entry)
+    return {size: items for size, items in groups.items() if len(items) >= 2}

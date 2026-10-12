@@ -4,21 +4,29 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dupefind"
-version = "0.1.0"
+version = "0.2.0"
 description = "Find duplicate files by staged hashing: group by size, then partial hash, then full hash"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Javier Lianes", email = "javier@lianes8studio.com" }]
-keywords = []
+keywords = ["duplicates", "dedupe", "fdupes", "hash", "files", "filesystem", "hardlink", "cli"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Environment :: Console",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
     "Programming Language :: Python :: 3",
     "Typing :: Typed",
 ]
 dependencies = []
+
+[project.scripts]
+dupefind = "dupefind._cli:main"
 
 [project.optional-dependencies]
 dev = ["ruff", "mypy", "pytest", "build", "twine"]
