@@ -7,7 +7,7 @@ Progress:
 - [x] Staging: configurable algorithm and partial size, change detection, progress callback
 - [x] Safe actions: plan and apply delete or hardlink, dry run by default, keep policies
 - [x] JSON output and CLI (`dupefind PATH...`)
-- [ ] Docs: README, GUIDE, CHANGELOG, docstrings
+- [x] Docs: README, GUIDE, CHANGELOG, docstrings
 - [ ] Gates: ruff format, ruff check, mypy --strict, pytest
 - [ ] Contracts, brute-force oracle on seeded trees, real wheel e2e
 - [ ] Pull request opened
