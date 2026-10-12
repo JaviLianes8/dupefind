@@ -59,13 +59,13 @@ class Stages:
                     done.append(prefix_group)  # the prefix covered the whole file
                 else:
                     pending.append([entry for _, entry in prefix_group])
-        for prefix_group in done:
-            yield from self._confirm(prefix_group)
         total = sum(len(group) for group in pending)
         counter = _Counter("full", total, self.walker.on_progress, self.stats.bytes_read)
         for group in pending:
             for full_group in self._regroup(group, self._full, counter).values():
                 yield from self._confirm(full_group)
+        for prefix_group in done:  # every one of these is smaller than any pending file
+            yield from self._confirm(prefix_group)
 
     def _partial(self, entry: Entry) -> str:
         digest, read = hash_prefix(entry.path, self.options.algorithm, self.options.partial_size)
