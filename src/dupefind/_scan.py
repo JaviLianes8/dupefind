@@ -41,7 +41,6 @@ class Walker:
         self.on_progress = on_progress
         self.entries: list[Entry] = []
         self._dirs: set[str] = set()
-        self._files: set[str] = set()
 
     def walk(self, roots: Iterable[str | os.PathLike[str]]) -> list[Entry]:
         """Walk every root in order and return the files found, each once."""
@@ -62,14 +61,14 @@ class Walker:
             return
         if stat.S_ISDIR(info.st_mode):
             self._walk_dir(root)
-        elif stat.S_ISREG(info.st_mode) and self._first(self._files, root):
+        elif stat.S_ISREG(info.st_mode):
             self._consider(root, root.name, info)
 
     def _walk_dir(self, root: Path) -> None:
         stack: list[tuple[Path, str]] = [(root, "")]
         while stack:
             current, rel = stack.pop()
-            if not self._first(self._dirs, current):
+            if not _first(self._dirs, current):
                 continue
             try:
                 with os.scandir(current) as it:
@@ -99,8 +98,6 @@ class Walker:
                 return None
             if self._excluded(entry.name, rel) or not self._included(entry.name, rel):
                 return None
-            if linked and not self._first(self._files, path):
-                return None
             info = entry.stat(follow_symlinks=follow)
         except OSError as exc:
             self.issue(path, exc)
@@ -122,20 +119,26 @@ class Walker:
         patterns = self.options.include
         return not patterns or any(_match(pattern, name, rel) for pattern in patterns)
 
-    def _first(self, seen: set[str], path: Path) -> bool:
-        """Return True the first time a real location is met, so nothing is walked twice."""
-        try:
-            key = os.path.normcase(os.path.realpath(path))
-        except OSError:
-            key = os.path.normcase(os.path.abspath(path))
-        if key in seen:
-            return False
-        seen.add(key)
-        return True
-
 
 def _match(pattern: str, name: str, rel: str) -> bool:
     return fnmatch(rel, pattern) if "/" in pattern else fnmatch(name, pattern)
+
+
+def real_key(path: Path) -> str:
+    """Return a key naming the location ``path`` really refers to, links resolved."""
+    try:
+        return os.path.normcase(os.path.realpath(path))
+    except OSError:
+        return os.path.normcase(os.path.abspath(path))
+
+
+def _first(seen: set[str], path: Path) -> bool:
+    """Return True the first time a real location is met, so nothing is walked twice."""
+    key = real_key(path)
+    if key in seen:
+        return False
+    seen.add(key)
+    return True
 
 
 def is_junction(info: os.stat_result) -> bool:

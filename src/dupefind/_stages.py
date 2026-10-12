@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 
 from ._hash import hash_prefix, hash_whole
 from ._options import ScanOptions
-from ._scan import Entry, Walker
+from ._scan import Entry, Walker, real_key
 from ._types import DuplicateFile, DuplicateGroup, Progress, ScanIssue, ScanStats, Stage
 
 
@@ -24,7 +24,12 @@ class Stages:
         """Fill in file identities and merge several names of one file, unless asked not to."""
         merged: dict[tuple[int, int], Entry] = {}
         result: list[Entry] = []
+        places: set[str] = set()
         for entry in same_size:
+            place = real_key(entry.path)
+            if place in places:
+                continue  # the same directory entry reached by two spellings
+            places.add(place)
             info = self._restat(entry)
             if info is None:
                 continue
