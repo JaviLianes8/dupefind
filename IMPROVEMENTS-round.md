@@ -10,7 +10,7 @@ Progress:
 - [x] Docs: README, GUIDE, CHANGELOG, docstrings
 - [x] Gates: ruff format, ruff check, mypy --strict, pytest
 - [x] Contracts, brute-force oracle on seeded trees, real wheel e2e
-- [ ] Pull request opened
+- [x] Pull request opened (#2)
 - [ ] Independent review findings fixed, guard clean
 
 Every item is additive. `find_duplicates` and `iter_duplicates` keep their names,
