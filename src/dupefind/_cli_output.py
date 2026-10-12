@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TextIO
 
-from ._actions import ActionResult
-from ._types import ScanReport
+from ._types import ActionResult, ScanReport
 
 
 def print_groups(report: ScanReport, out: TextIO) -> None:

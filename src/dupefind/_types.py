@@ -98,3 +98,32 @@ class ScanReport:
     groups: list[DuplicateGroup] = field(default_factory=list)
     issues: list[ScanIssue] = field(default_factory=list)
     stats: ScanStats = field(default_factory=ScanStats)
+
+
+Action = Literal["delete", "hardlink"]
+"""``delete`` removes the extra copies; ``hardlink`` replaces them with links to the kept one."""
+
+KeepPolicy = Literal["first", "oldest", "newest", "shortest"]
+"""Which copy of a group survives: first by path, oldest or newest mtime, shortest path."""
+
+Status = Literal["done", "dry-run", "skipped", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedAction:
+    """Do ``action`` to ``target``, whose content equals the kept file ``keep``."""
+
+    action: Action
+    target: Path
+    keep: Path
+    size: int
+    digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class ActionResult:
+    """What happened to one planned action, with the reason when it was not done."""
+
+    planned: PlannedAction
+    status: Status
+    reason: str = ""

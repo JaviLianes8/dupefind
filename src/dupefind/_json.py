@@ -7,8 +7,7 @@ from collections.abc import Iterable
 from dataclasses import asdict
 from typing import Any
 
-from ._actions import ActionResult
-from ._types import DuplicateGroup, ScanReport
+from ._types import ActionResult, DuplicateGroup, ScanReport
 
 SCHEMA_VERSION = 1
 """Bumped only when a field is removed or changes meaning. New fields may be added."""

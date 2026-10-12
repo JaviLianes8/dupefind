@@ -3,46 +3,21 @@
 from __future__ import annotations
 
 import os
-import secrets
-import stat
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
-from ._hash import same_content
-from ._types import DuplicateFile, DuplicateGroup
-
-Action = Literal["delete", "hardlink"]
-"""``delete`` removes the extra copies; ``hardlink`` replaces them with links to the kept one."""
-
-KeepPolicy = Literal["first", "oldest", "newest", "shortest"]
-"""Which copy of a group survives: first by path, oldest or newest mtime, shortest path."""
-
-Status = Literal["done", "dry-run", "skipped", "failed"]
+from ._apply import check, run
+from ._types import (
+    Action,
+    ActionResult,
+    DuplicateFile,
+    DuplicateGroup,
+    KeepPolicy,
+    PlannedAction,
+)
 
 ACTIONS: tuple[Action, ...] = ("delete", "hardlink")
 KEEP_POLICIES: tuple[KeepPolicy, ...] = ("first", "oldest", "newest", "shortest")
-
-
-@dataclass(frozen=True, slots=True)
-class PlannedAction:
-    """Do ``action`` to ``target``, whose content equals the kept file ``keep``."""
-
-    action: Action
-    target: Path
-    keep: Path
-    size: int
-    digest: str
-
-
-@dataclass(frozen=True, slots=True)
-class ActionResult:
-    """What happened to one planned action, with the reason when it was not done."""
-
-    planned: PlannedAction
-    status: Status
-    reason: str = ""
 
 
 def choose_keeper(group: DuplicateGroup, keep: KeepPolicy = "oldest") -> DuplicateFile:
@@ -93,11 +68,14 @@ def plan_actions(
 def apply_actions(plan: Iterable[PlannedAction], *, dry_run: bool = True) -> list[ActionResult]:
     """Carry out a plan. With the default ``dry_run=True`` nothing is changed.
 
-    Each action is re-checked right before it runs (and in a dry run): the kept file
-    and the target must both exist, must not be the same file, must still have the
-    planned size, and must be equal byte for byte. A target that is also a kept file
-    in the plan is never touched. Failures are reported, never raised, and the next
-    action still runs.
+    Each action is verified right before it runs (and in a dry run). The target
+    must be a regular, writable file of its own (not a link, junction or read-only
+    file); the kept copy must exist; the two must not be the same file, must still
+    have the planned size and must be equal byte for byte. Just before the delete or
+    the replace, both are stat'ed once more and must still be the very files that
+    were compared. A target that is also a kept file in the plan is never touched.
+    Anything that fails a check is ``skipped`` with a reason; an OS error while
+    acting is ``failed``. Nothing is raised and the next action still runs.
     """
     actions = list(plan)
     keepers = {_norm(item.keep) for item in actions}
@@ -106,66 +84,14 @@ def apply_actions(plan: Iterable[PlannedAction], *, dry_run: bool = True) -> lis
         if _norm(item.target) in keepers:
             results.append(ActionResult(item, "skipped", "target is a kept file"))
             continue
-        reason = _check(item)
-        if reason:
+        reason, pinned = check(item)
+        if pinned is None:
             results.append(ActionResult(item, "skipped", reason))
         elif dry_run:
             results.append(ActionResult(item, "dry-run"))
         else:
-            results.append(_run(item))
+            results.append(run(item, *pinned))
     return results
-
-
-def _check(item: PlannedAction) -> str:
-    try:
-        kept = os.stat(item.keep)
-        target = os.stat(item.target)
-    except OSError as exc:
-        return f"cannot stat: {exc}"
-    if not (stat.S_ISREG(kept.st_mode) and stat.S_ISREG(target.st_mode)):
-        return "not a regular file"
-    if os.path.samestat(kept, target):
-        return "already the same file as the kept copy"
-    if kept.st_size != item.size or target.st_size != item.size:
-        return "size changed since the scan"
-    if item.action == "hardlink" and kept.st_dev != target.st_dev:
-        return "on a different device than the kept copy"
-    try:
-        equal = same_content(item.keep, item.target)
-    except OSError as exc:
-        return f"cannot compare: {exc}"
-    return "" if equal else "content differs from the kept copy"
-
-
-def _run(item: PlannedAction) -> ActionResult:
-    try:
-        if item.action == "delete":
-            os.remove(item.target)
-        else:
-            _relink(item.keep, item.target)
-    except OSError as exc:
-        return ActionResult(item, "failed", str(exc))
-    return ActionResult(item, "done")
-
-
-def _relink(keep: Path, target: Path) -> None:
-    """Replace ``target`` with a hard link to ``keep`` without a moment of absence.
-
-    The link is made to the real file behind ``keep`` (never to a symlink, which some
-    platforms would link as is) and is checked to be that file before it replaces
-    the target.
-    """
-    source = os.path.realpath(keep)
-    temp = target.with_name(f".{target.name}.{secrets.token_hex(6)}.dupefind")
-    os.link(source, temp)
-    try:
-        made = os.stat(temp, follow_symlinks=False)
-        if not stat.S_ISREG(made.st_mode) or not os.path.samestat(made, os.stat(keep)):
-            raise OSError(f"the new link at {temp} is not the kept file")
-        os.replace(temp, target)
-    except OSError:
-        os.remove(temp)
-        raise
 
 
 def _norm(path: Path) -> str:

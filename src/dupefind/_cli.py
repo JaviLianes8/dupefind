@@ -9,11 +9,12 @@ from collections.abc import Sequence
 from typing import NoReturn, TextIO
 
 from . import __version__
-from ._actions import KEEP_POLICIES, Action, KeepPolicy, apply_actions, plan_actions
+from ._actions import KEEP_POLICIES, apply_actions, plan_actions
 from ._cli_output import print_actions, print_groups, print_summary
 from ._find import scan
 from ._json import report_to_json
 from ._options import ScanOptions
+from ._types import Action, KeepPolicy
 
 _EXAMPLES = """\
 examples:

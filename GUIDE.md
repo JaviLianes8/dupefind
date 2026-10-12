@@ -83,13 +83,35 @@ appear with `follow_symlinks`), so the real data is what is kept.
 `status` `dry-run`, `done`, `skipped` or `failed`. Every item, in a dry run too, is
 checked right before it would run:
 
-- the kept file and the target both exist and are regular files;
+- the target, looked at without following links, is a regular file of its own:
+  a symlink, a junction or a directory found at the target path is refused, so
+  with `follow_symlinks` the symlinks in a group are reported but never acted on;
+- the target is writable (see read-only files below);
+- the kept file exists and is a regular file;
 - they are not the same file (same device and file id), so a hard link, junction
   path, symlink or other spelling of the kept file is never removed;
 - both still have the planned size;
 - for `hardlink`, both are on the same device;
 - the two files are equal byte for byte;
 - the target is not a kept file anywhere in the plan.
+
+Then, immediately before the delete or the replace, both paths are stat'ed again
+and must still show the same device, file id, size, modification time and mode as
+the files that were just compared. A target replaced by another file or a link, or
+a kept file removed or rewritten in between, is refused. A refusal never touches
+either file, so a group always keeps at least the kept copy. The only remaining
+window is the few instructions between that last stat and the system call; no
+portable file API can close it, which is why the checks are repeated so late.
+
+Read-only files: a target that is read-only (the Windows read-only attribute, or
+no owner write bit or no write access on POSIX, such as mode 0444) is `skipped`
+with the reason `target is read-only`, for both actions, in a dry run too, and is
+left exactly as it was. Clear the flag first if you want it handled. A read-only
+kept file is fine: it is only read, and a hard link to it shares its attributes.
+If the operating system refuses the act itself (for example a target in a
+directory you cannot write to), the result is `failed`; a delete then did not
+happen, and a hard link leaves the target unchanged and removes its temporary
+name.
 
 `hardlink` links to the real file behind the kept path, creates the new link next
 to the target under a temporary name, checks that it is the kept file, and moves it

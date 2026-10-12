@@ -6,22 +6,18 @@ Scanning only ever reads files. Clean-up is a separate, explicit step:
 
 from __future__ import annotations
 
-from ._actions import (
-    Action,
-    ActionResult,
-    KeepPolicy,
-    PlannedAction,
-    apply_actions,
-    choose_keeper,
-    plan_actions,
-)
+from ._actions import apply_actions, choose_keeper, plan_actions
 from ._find import find_duplicates, iter_duplicates, iter_groups, scan
 from ._json import SCHEMA_VERSION, report_to_dict, report_to_json
 from ._options import ScanOptions
 from ._types import (
+    Action,
+    ActionResult,
     DuplicateFile,
     DuplicateGroup,
     IssueKind,
+    KeepPolicy,
+    PlannedAction,
     Progress,
     ScanIssue,
     ScanReport,

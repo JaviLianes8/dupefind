@@ -80,7 +80,9 @@ apply_actions(plan, dry_run=False)  # now it happens
 `keep` is `first`, `oldest`, `newest` or `shortest`. `action="hardlink"` replaces
 each copy with a hard link to the kept file instead. Right before acting, every
 pair is checked again: both files exist, are not the same file, have the scanned
-size, and are equal byte for byte. Anything else is skipped and reported.
+size, and are equal byte for byte; then both are stat'ed once more just before the
+act. Links, junctions and read-only files are never removed or replaced. Anything
+else is skipped and reported.
 
 ## Command line
 

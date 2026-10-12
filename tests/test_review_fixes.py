@@ -30,7 +30,7 @@ def test_hardlink_to_a_relative_symlink_keeper_links_the_real_file(tmp_path: Pat
     assert os.path.samefile(other, real)
 
 
-def test_symlinked_root_keeps_the_regular_file_when_linking(tmp_path: Path) -> None:
+def test_symlinked_root_keeps_the_regular_file_and_spares_the_link(tmp_path: Path) -> None:
     real = write(tmp_path / "d1" / "R", b"keeper bytes")
     os.utime(real, (1_000_000, 1_000_000))
     link = symlink(tmp_path / "d1" / "L", Path("R"))
@@ -39,7 +39,10 @@ def test_symlinked_root_keeps_the_regular_file_when_linking(tmp_path: Path) -> N
     groups = scan(link, tmp_path / "d2", options=ScanOptions(follow_symlinks=True)).groups
     results = apply_actions(plan_actions(groups, action="hardlink"), dry_run=False)
 
-    assert [(r.status, r.planned.keep) for r in results] == [("done", other)]
+    (result,) = results
+    assert (result.status, result.planned.keep, result.planned.target) == ("skipped", other, link)
+    assert "link" in result.reason
+    assert link.is_symlink()
     assert real.read_bytes() == other.read_bytes() == link.read_bytes() == b"keeper bytes"
 
 
@@ -53,7 +56,8 @@ def test_a_symlink_keeper_loses_to_a_regular_file(tmp_path: Path) -> None:
 
     assert choose_keeper(group, "oldest").path == copy
     (result,) = apply_actions(plan_actions([group]), dry_run=False)
-    assert result.planned.target == link
+    assert (result.planned.target, result.status) == (link, "skipped")
+    assert link.is_symlink()
     assert copy.read_bytes() == b"shared" and outside.read_bytes() == b"shared"
 
 
