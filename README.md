@@ -43,9 +43,9 @@ for digest, paths in iter_duplicates("path/to/tree"):
 from dupefind import ScanOptions, iter_groups
 
 options = ScanOptions(
-    algorithm="blake2b",     # any fixed-size hashlib algorithm, default sha256
+    algorithm="blake2b",  # any fixed-size hashlib algorithm, default sha256
     partial_size=64 * 1024,  # bytes hashed before any full read
-    min_size=1,              # leave empty files alone
+    min_size=1,  # leave empty files alone
     exclude=(".git", "*.tmp"),
 )
 for group in iter_groups("data", options=options, on_progress=print):
@@ -72,9 +72,9 @@ Safe defaults, in line with fdupes, jdupes and rmlint:
 from dupefind import apply_actions, plan_actions, scan
 
 plan = plan_actions(scan("photos").groups, action="delete", keep="oldest")
-for result in apply_actions(plan):               # dry run: nothing changes
+for result in apply_actions(plan):  # dry run: nothing changes
     print(result.status, result.planned.target)
-apply_actions(plan, dry_run=False)               # now it happens
+apply_actions(plan, dry_run=False)  # now it happens
 ```
 
 `keep` is `first`, `oldest`, `newest` or `shortest`. `action="hardlink"` replaces

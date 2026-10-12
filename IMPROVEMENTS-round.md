@@ -8,8 +8,8 @@ Progress:
 - [x] Safe actions: plan and apply delete or hardlink, dry run by default, keep policies
 - [x] JSON output and CLI (`dupefind PATH...`)
 - [x] Docs: README, GUIDE, CHANGELOG, docstrings
-- [ ] Gates: ruff format, ruff check, mypy --strict, pytest
-- [ ] Contracts, brute-force oracle on seeded trees, real wheel e2e
+- [x] Gates: ruff format, ruff check, mypy --strict, pytest
+- [x] Contracts, brute-force oracle on seeded trees, real wheel e2e
 - [ ] Pull request opened
 - [ ] Independent review findings fixed, guard clean
 
