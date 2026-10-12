@@ -4,7 +4,30 @@ import dupefind
 
 # The public API. Add every exported name here as the library grows; this list is the
 # contract and the test below fails if the module and this list disagree.
-PUBLIC_API: list[str] = ["find_duplicates", "iter_duplicates"]
+PUBLIC_API: list[str] = [
+    "SCHEMA_VERSION",
+    "Action",
+    "ActionResult",
+    "DuplicateFile",
+    "DuplicateGroup",
+    "IssueKind",
+    "KeepPolicy",
+    "PlannedAction",
+    "Progress",
+    "ScanIssue",
+    "ScanOptions",
+    "ScanReport",
+    "ScanStats",
+    "apply_actions",
+    "choose_keeper",
+    "find_duplicates",
+    "iter_duplicates",
+    "iter_groups",
+    "plan_actions",
+    "report_to_dict",
+    "report_to_json",
+    "scan",
+]
 
 
 def test_all_lists_exactly_the_public_api() -> None:

@@ -2,10 +2,10 @@
 
 Progress:
 - [x] Brainstorm ranked improvements (this file)
-- [ ] Typed results, options and scan issues (`ScanOptions`, `DuplicateGroup`, `ScanReport`)
-- [ ] Walker: hard-link identity, junctions and symlinks not followed, globs, size limits
-- [ ] Staging: configurable algorithm and partial size, change detection, progress callback
-- [ ] Safe actions: plan and apply delete or hardlink, dry run by default, keep policies
+- [x] Typed results, options and scan issues (`ScanOptions`, `DuplicateGroup`, `ScanReport`)
+- [x] Walker: hard-link identity, junctions and symlinks not followed, globs, size limits
+- [x] Staging: configurable algorithm and partial size, change detection, progress callback
+- [x] Safe actions: plan and apply delete or hardlink, dry run by default, keep policies
 - [ ] JSON output and CLI (`dupefind PATH...`)
 - [ ] Docs: README, GUIDE, CHANGELOG, docstrings
 - [ ] Gates: ruff format, ruff check, mypy --strict, pytest

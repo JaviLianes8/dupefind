@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dupefind"
-version = "0.1.0"
+version = "0.2.0"
 description = "Find duplicate files by staged hashing: group by size, then partial hash, then full hash"
 readme = "README.md"
 requires-python = ">=3.10"
