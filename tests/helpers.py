@@ -35,6 +35,7 @@ def junction(link: Path, target: Path) -> Path:
 
 def symlink(link: Path, target: Path) -> Path:
     """Create a symlink, or skip when the platform or account does not allow it."""
+    link.parent.mkdir(parents=True, exist_ok=True)
     try:
         link.symlink_to(target, target_is_directory=target.is_dir())
     except (OSError, NotImplementedError) as exc:

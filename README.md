@@ -93,8 +93,8 @@ dupefind . --delete --keep oldest --apply # really delete the other copies
 dupefind . --hardlink --apply             # link copies to one file
 ```
 
-Nothing changes unless `--apply` is given with `--delete` or `--hardlink`. A
-summary and any skipped paths go to stderr. Exit status is 0 on success and 1 on
+Nothing changes unless `--apply` is given with `--delete` or `--hardlink`. Those
+two leave empty files alone unless `--empty` is added. A summary and any skipped paths go to stderr. Exit status is 0 on success and 1 on
 an error or a failed action.
 
 See [GUIDE.md](GUIDE.md) for the staging, every option, the JSON schema and the

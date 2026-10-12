@@ -25,6 +25,7 @@ class Entry:
     mtime_ns: int
     identity: tuple[int, int] | None = None
     aliases: list[Path] = field(default_factory=list)
+    explicit: bool = False  # given as a root, so followed even when it is a link
 
 
 class Walker:
@@ -62,7 +63,7 @@ class Walker:
         if stat.S_ISDIR(info.st_mode):
             self._walk_dir(root)
         elif stat.S_ISREG(info.st_mode):
-            self._consider(root, root.name, info)
+            self._consider(root, root.name, info, explicit=True)
 
     def _walk_dir(self, root: Path) -> None:
         stack: list[tuple[Path, str]] = [(root, "")]
@@ -105,9 +106,12 @@ class Walker:
         self._consider(path, rel, info)
         return None
 
-    def _consider(self, path: Path, rel: str, info: os.stat_result) -> None:
+    def _consider(
+        self, path: Path, rel: str, info: os.stat_result, *, explicit: bool = False
+    ) -> None:
         if self.options.accepts_size(info.st_size):
-            self.entries.append(Entry(path, info.st_size, info.st_mtime_ns))
+            entry = Entry(path, info.st_size, info.st_mtime_ns, explicit=explicit)
+            self.entries.append(entry)
         if self.on_progress is not None:
             count = len(self.entries)
             self.on_progress(Progress("walk", count, count))

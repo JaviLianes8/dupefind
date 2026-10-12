@@ -11,7 +11,7 @@ Progress:
 - [x] Gates: ruff format, ruff check, mypy --strict, pytest
 - [x] Contracts, brute-force oracle on seeded trees, real wheel e2e
 - [x] Pull request opened (#2)
-- [ ] Independent review findings fixed, guard clean
+- [x] Independent review findings fixed, guard clean
 
 Every item is additive. `find_duplicates` and `iter_duplicates` keep their names,
 their positional `root` argument, `follow_symlinks`, and their return types.

@@ -69,6 +69,9 @@ clean-up.
 items. One file per group survives with its aliases; every other file and every
 alias of it gets an action, so a delete frees the space.
 
+A regular file is always preferred as the survivor over a symlink (which can only
+appear with `follow_symlinks`), so the real data is what is kept.
+
 | `keep` | Survivor (ties broken by path) |
 | --- | --- |
 | `first` | first path in sort order |
@@ -88,10 +91,15 @@ checked right before it would run:
 - the two files are equal byte for byte;
 - the target is not a kept file anywhere in the plan.
 
-`hardlink` creates the new link next to the target under a temporary name and
-moves it over the target in one step, so the target name never goes missing.
+`hardlink` links to the real file behind the kept path, creates the new link next
+to the target under a temporary name, checks that it is the kept file, and moves it
+over the target in one step, so the target name never goes missing.
 Windows allows at most 1023 extra hard links per file; beyond that the action
 fails and is reported.
+
+Only file contents are compared. Metadata that is not part of the content, such as
+permissions, owners, extended attributes or extra NTFS data streams, is not
+compared and goes with a removed or replaced copy.
 
 ## JSON
 
@@ -122,8 +130,11 @@ dupefind PATH [PATH ...] [--json] [--algorithm NAME] [--partial-size N]
          [--min-size N] [--max-size N] [--no-empty] [--include GLOB]...
          [--exclude GLOB]... [--follow-symlinks] [--hardlinks]
          [--delete | --hardlink] [--keep first|oldest|newest|shortest]
-         [--apply] [-q]
+         [--apply] [--empty] [-q]
 ```
+
+With `--delete` or `--hardlink`, empty files are left out unless `--empty` is given
+(a plain report still lists them, unless `--no-empty`).
 
 Sizes accept `K`, `M`, `G` and `T` suffixes (powers of 1024). Text output lists
 each group as `# SIZE bytes x N files, ALGORITHM:DIGEST`, its paths (aliases

@@ -48,9 +48,12 @@ class ActionResult:
 def choose_keeper(group: DuplicateGroup, keep: KeepPolicy = "oldest") -> DuplicateFile:
     """Return the file of ``group`` that ``keep`` says should survive.
 
-    Ties are broken by path, so the choice is deterministic.
+    A regular file is always preferred over a symlink (seen with
+    ``follow_symlinks``), so the real data is what survives. Ties are broken by
+    path, so the choice is deterministic.
     """
-    files = group.files
+    real = [f for f in group.files if not os.path.islink(f.path)]
+    files = real or list(group.files)
     if keep == "first":
         return min(files, key=lambda f: str(f.path))
     if keep == "oldest":
@@ -146,10 +149,19 @@ def _run(item: PlannedAction) -> ActionResult:
 
 
 def _relink(keep: Path, target: Path) -> None:
-    """Replace ``target`` with a hard link to ``keep`` without a moment of absence."""
+    """Replace ``target`` with a hard link to ``keep`` without a moment of absence.
+
+    The link is made to the real file behind ``keep`` (never to a symlink, which some
+    platforms would link as is) and is checked to be that file before it replaces
+    the target.
+    """
+    source = os.path.realpath(keep)
     temp = target.with_name(f".{target.name}.{secrets.token_hex(6)}.dupefind")
-    os.link(keep, temp)
+    os.link(source, temp)
     try:
+        made = os.stat(temp, follow_symlinks=False)
+        if not stat.S_ISREG(made.st_mode) or not os.path.samestat(made, os.stat(keep)):
+            raise OSError(f"the new link at {temp} is not the kept file")
         os.replace(temp, target)
     except OSError:
         os.remove(temp)

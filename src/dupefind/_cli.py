@@ -25,6 +25,7 @@ examples:
   dupefind . --hardlink --apply          replace copies with hard links to one file
 
 Nothing is changed unless --apply is given with --delete or --hardlink.
+With --delete or --hardlink, empty files are left alone unless --empty is given.
 Exit status: 0 on success, 1 on an error or a failed action.
 """
 
@@ -63,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     add("--min-size", type=parse_size, default=0, help="ignore smaller files (e.g. 10K)")
     add("--max-size", type=parse_size, default=None, help="ignore larger files (e.g. 2G)")
     add("--no-empty", action="store_true", help="ignore zero-length files")
+    add("--empty", action="store_true", help="let --delete/--hardlink act on empty files")
     add("--include", action="append", default=[], metavar="GLOB", help="only these files")
     add("--exclude", action="append", default=[], metavar="GLOB", help="skip files and dirs")
     add("--follow-symlinks", action="store_true", help="follow symlinks and junctions")
@@ -78,12 +80,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None, *, stdout: TextIO | None = None) -> int:
     """Run the command line tool and return its exit status."""
-    out = stdout if stdout is not None else sys.stdout
+    _tolerate_unencodable(sys.stderr)
+    out = stdout if stdout is not None else _tolerate_unencodable(sys.stdout)
     parser = build_parser()
     args = parser.parse_args(argv)
     action: Action | None = "delete" if args.delete else "hardlink" if args.hardlink else None
     if args.apply and action is None:
         parser.error("--apply needs --delete or --hardlink")
+    if args.empty and (action is None or args.no_empty):
+        parser.error("--empty needs --delete or --hardlink and no --no-empty")
     missing = [path for path in args.paths if not os.path.exists(path)]
     if missing:
         parser.error(f"no such file or directory: {missing[0]}")
@@ -93,7 +98,7 @@ def main(argv: Sequence[str] | None = None, *, stdout: TextIO | None = None) -> 
             partial_size=args.partial_size,
             min_size=args.min_size,
             max_size=args.max_size,
-            include_empty=not args.no_empty,
+            include_empty=not args.no_empty and (action is None or args.empty),
             include=tuple(args.include),
             exclude=tuple(args.exclude),
             follow_symlinks=args.follow_symlinks,
@@ -117,3 +122,11 @@ def main(argv: Sequence[str] | None = None, *, stdout: TextIO | None = None) -> 
         print_summary(report, results, sys.stderr)
     failed = results is not None and any(r.status == "failed" for r in results)
     return 1 if failed else 0
+
+
+def _tolerate_unencodable(stream: TextIO) -> TextIO:
+    """Write paths the console encoding cannot show as escapes instead of failing."""
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(errors="backslashreplace")
+    return stream

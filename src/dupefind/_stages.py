@@ -116,7 +116,8 @@ class Stages:
 
     def _restat(self, entry: Entry) -> os.stat_result | None:
         try:
-            info = os.stat(entry.path, follow_symlinks=self.options.follow_symlinks)
+            follow = self.options.follow_symlinks or entry.explicit
+            info = os.stat(entry.path, follow_symlinks=follow)
         except OSError as exc:
             self.walker.issue(entry.path, exc)
             return None
