@@ -15,7 +15,7 @@ Progress:
 - [x] Read-only targets refused, documented and tested (Windows attribute, POSIX 0444 in WSL)
 - [x] Swaps between scan and apply (TOCTOU) refused, with a last re-stat before acting, tested
 - [x] Second independent review (junction loops and roots, repeated, cased and nested roots) fixed
-- [ ] Gates, guard and PR body refreshed
+- [x] Gates, guard and PR body refreshed
 
 Every item is additive. `find_duplicates` and `iter_duplicates` keep their names,
 their positional `root` argument, `follow_symlinks`, and their return types.
