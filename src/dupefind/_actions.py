@@ -6,7 +6,8 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 
-from ._apply import check, run
+from ._act import run
+from ._apply import check
 from ._types import (
     Action,
     ActionResult,

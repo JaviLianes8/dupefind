@@ -81,8 +81,9 @@ apply_actions(plan, dry_run=False)  # now it happens
 each copy with a hard link to the kept file instead. Right before acting, every
 pair is checked again: both files exist, are not the same file, have the scanned
 size, and are equal byte for byte; then both are stat'ed once more just before the
-act. Links, junctions and read-only files are never removed or replaced. Anything
-else is skipped and reported.
+act, the target is moved aside and checked again, and the kept file is held open.
+Links, junctions, read-only files and (on Windows) files with extra data streams
+are never removed or replaced. Anything else is skipped and reported.
 
 ## Command line
 

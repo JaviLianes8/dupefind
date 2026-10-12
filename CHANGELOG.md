@@ -21,8 +21,9 @@ All notable changes to this project are documented here. The format follows
 - `plan_actions`, `apply_actions` and `choose_keeper`: delete or hard link extra
   copies with a keep policy (first, oldest, newest, shortest). Dry run by
   default; every action re-checks size, identity and byte-for-byte equality,
-  stats both files again just before acting, and refuses links, junctions and
-  read-only targets.
+  stats both files again just before acting, moves the target aside and checks it
+  once more before removing it, and refuses links, junctions, read-only targets
+  and targets with extra NTFS data streams.
 - `report_to_json` and `report_to_dict` with a versioned schema.
 - The `dupefind` command line tool and `python -m dupefind`.
 - GUIDE.md.

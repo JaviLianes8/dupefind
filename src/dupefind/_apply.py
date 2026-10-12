@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import os
-import secrets
 import stat
-from pathlib import Path
 
 from ._hash import same_content
-from ._types import ActionResult, PlannedAction
+from ._streams import extra_streams
+from ._types import PlannedAction
 
 _MOUNT_POINT = 0xA0000003  # IO_REPARSE_TAG_MOUNT_POINT: a Windows junction
 
 
-def _pin(info: os.stat_result) -> tuple[int, int, int, int, int]:
+def pin(info: os.stat_result) -> tuple[int, int, int, int, int]:
     """The facts that must not change between the check and the act."""
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_mode)
 
@@ -53,6 +52,12 @@ def check(item: PlannedAction) -> tuple[str, tuple[os.stat_result, os.stat_resul
         return f"cannot compare: {exc}", None
     if not equal:
         return "content differs from the kept copy", None
+    try:
+        streams = extra_streams(item.target)
+    except OSError as exc:
+        return f"cannot list data streams: {exc}", None
+    if streams:
+        return f"target has extra data streams: {', '.join(streams)}", None
     return "", (kept, target)
 
 
@@ -63,44 +68,8 @@ def unchanged(item: PlannedAction, kept: os.stat_result, target: os.stat_result)
         now_kept = os.stat(item.keep)
     except OSError as exc:
         return f"changed before acting: {exc}"
-    if _pin(now_target) != _pin(target):
+    if pin(now_target) != pin(target):
         return "target was replaced or modified before acting"
-    if _pin(now_kept) != _pin(kept):
+    if pin(now_kept) != pin(kept):
         return "the kept copy was replaced or modified before acting"
     return ""
-
-
-def run(item: PlannedAction, kept: os.stat_result, target: os.stat_result) -> ActionResult:
-    """Act on a checked item after a last identity check. Never raises ``OSError``."""
-    reason = unchanged(item, kept, target)
-    if reason:
-        return ActionResult(item, "skipped", reason)
-    try:
-        if item.action == "delete":
-            os.remove(item.target)
-        else:
-            relink(item.keep, item.target, kept)
-    except OSError as exc:
-        return ActionResult(item, "failed", str(exc))
-    return ActionResult(item, "done")
-
-
-def relink(keep: Path, target: Path, kept: os.stat_result) -> None:
-    """Replace ``target`` with a hard link to the kept file without a moment of absence.
-
-    The link is made to the real file behind ``keep`` under a temporary name next to
-    the target, checked to be the very file that was verified, and only then moved
-    over the target. On any failure the temporary name is removed and the target is
-    left as it was.
-    """
-    source = os.path.realpath(keep)
-    temp = target.with_name(f".{target.name}.{secrets.token_hex(6)}.dupefind")
-    os.link(source, temp)
-    try:
-        made = os.lstat(temp)
-        if not stat.S_ISREG(made.st_mode) or not os.path.samestat(made, kept):
-            raise OSError(f"the new link at {temp} is not the kept file")
-        os.replace(temp, target)
-    except OSError:
-        os.remove(temp)
-        raise

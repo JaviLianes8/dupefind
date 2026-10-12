@@ -50,8 +50,10 @@ class Walker:
         return self.entries
 
     def issue(self, path: Path, exc: OSError) -> None:
-        """Record an OS error against ``path``."""
-        self.issues.append(ScanIssue(path, issue_kind(exc), str(exc)))
+        """Record an OS error against ``path``, once per path and kind."""
+        found = ScanIssue(path, issue_kind(exc), str(exc))
+        if not any((i.path, i.kind) == (found.path, found.kind) for i in self.issues):
+            self.issues.append(found)
 
     def _walk_root(self, root: Path) -> None:
         # Paths given explicitly are followed even when they are links, like `find -H`.

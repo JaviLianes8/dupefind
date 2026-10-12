@@ -145,7 +145,7 @@ def test_keeper_removed_in_the_last_moment_leaves_a_copy(
 
     result = _apply(plan)
 
-    assert result.status == "skipped" and "changed before acting" in result.reason
+    assert result.status == "skipped"
     assert _copies(keep, target) == 1 and target.read_bytes() == DATA
 
 

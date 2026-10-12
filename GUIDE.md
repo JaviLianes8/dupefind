@@ -95,33 +95,49 @@ checked right before it would run:
 - the two files are equal byte for byte;
 - the target is not a kept file anywhere in the plan.
 
-Then, immediately before the delete or the replace, both paths are stat'ed again
-and must still show the same device, file id, size, modification time and mode as
-the files that were just compared. A target replaced by another file or a link, or
-a kept file removed or rewritten in between, is refused. A refusal never touches
-either file, so a group always keeps at least the kept copy. The only remaining
-window is the few instructions between that last stat and the system call; no
-portable file API can close it, which is why the checks are repeated so late.
+- on Windows, the target has no extra NTFS data streams (the download marker
+  `Zone.Identifier` is allowed), since only the main stream is compared and the
+  others would be lost.
+
+Then the act itself is guarded so the data always exists under some name:
+
+1. The kept file is opened and held open until the act is over. On Windows this
+   stops any other process deleting or renaming it in the meantime.
+2. Both paths are stat'ed again and must still show the same device, file id,
+   size, modification time and mode as the files that were just compared.
+3. The target is renamed aside to a random name next to it
+   (`.NAME.RANDOM.dupefind`) and that aside file is checked once more to be the
+   compared file, and the kept file to be unchanged. A target swapped for another
+   file or a link, or a kept file removed or rewritten, is refused and the aside
+   file is put back under its name without overwriting anything.
+4. `delete` then removes the aside file. `hardlink` creates a hard link to the real
+   file behind the kept path at the freed name (which fails if anything appeared
+   there), checks it is the kept file, and only then removes the aside file.
+
+A refusal never removes either file, so a group always keeps at least the kept
+copy. During step 4 the target name is briefly missing, but its data is still on
+disk under the aside name; if the process is killed there, that file remains. If
+putting a file back fails, the result says where it is. What remains is the few
+instructions between the last check of the kept file and the removal of the aside
+copy, during which, on POSIX only (no open-file lock there), another process could
+delete the kept file.
 
 Read-only files: a target that is read-only (the Windows read-only attribute, or
 no owner write bit or no write access on POSIX, such as mode 0444) is `skipped`
 with the reason `target is read-only`, for both actions, in a dry run too, and is
 left exactly as it was. Clear the flag first if you want it handled. A read-only
 kept file is fine: it is only read, and a hard link to it shares its attributes.
-If the operating system refuses the act itself (for example a target in a
-directory you cannot write to), the result is `failed`; a delete then did not
-happen, and a hard link leaves the target unchanged and removes its temporary
-name.
+If a hard link to a read-only kept file has to be undone, the flag is cleared just
+long enough to remove that extra name and is then put back. If the operating
+system refuses the act itself (for example a busy target, or a directory you
+cannot write to), the result is `failed` and the target is left in place.
 
-`hardlink` links to the real file behind the kept path, creates the new link next
-to the target under a temporary name, checks that it is the kept file, and moves it
-over the target in one step, so the target name never goes missing.
 Windows allows at most 1023 extra hard links per file; beyond that the action
 fails and is reported.
 
 Only file contents are compared. Metadata that is not part of the content, such as
-permissions, owners, extended attributes or extra NTFS data streams, is not
-compared and goes with a removed or replaced copy.
+permissions, owners and extended attributes, is not compared and goes with a
+removed or replaced copy.
 
 ## JSON
 
